@@ -60,6 +60,7 @@ fit <- sdmTMB(cpue ~ 0 + fyear,
               time = "year",
               family = delta_gamma())
 sanity(fit) # passes all
+saveRDS(fit, "fitted_models/null.rds")
 ```
 
 ## Predictions
@@ -83,11 +84,80 @@ Now make predictions to the PBS - NWFSC grid
 
 ```{r}
 predictions <- predict(fit, newdata = expanded_grid, return_tmb_object = TRUE)
-index <- get_index(predictions, area = expanded_grid$area, bias_correct = TRUE)
+saveRDS(predictions,"predictions/null.rds")
 ```
 
 ## Index
 
 ```         
 index <- get_index(predictions, area = expanded_grid$area, bias_correct = TRUE)
+saveRDS(index, "indices/null.rds")
+```
+
+## Plots and diagnostics
+
+```{r}
+p1 <- index |>
+  ggplot(aes(year, log_est)) + 
+  geom_ribbon(aes(ymin=log_est-2*se, ymax=log_est+2*se), col=NA, fill=viridis(1), alpha=0.5) + 
+  geom_line(col=viridis(1)) + 
+  theme_bw() + 
+  xlab("Year") + ylab("Ln (estimate)")
+ggsave(plot = p1, filename = "plots/null/log_index.png",width=7,height=5)
+
+# Same plot, normal space
+p1 <- index |>
+  ggplot(aes(year, est)) + 
+  geom_ribbon(aes(ymin=lwr, ymax=upr), col=NA, fill=viridis(1), alpha=0.5) + 
+  geom_line(col=viridis(1)) + 
+  theme_bw() + 
+  xlab("Year") + ylab("Estimate")
+ggsave(plot = p1, filename = "plots/null/index.png",width=7,height=5)
+```
+
+Diagnostics – spatial fields
+
+```{r}
+predictions$data$scaled_omega_s1 <- predictions$data$omega_s1 - mean(predictions$data$omega_s1)
+p1 <- predictions$data |> 
+  filter(year==2003) |>
+ggplot(aes(X,Y, col=scaled_omega_s1)) + 
+  geom_point(size=0.01,alpha=0.3) +
+    coord_fixed() + 
+  scale_color_gradient2()
+ggsave(plot = p1, filename = "plots/null/omega_s1.png",width=7,height=5)
+
+p1 <- predictions$data |> 
+  filter(year==2003) |>
+ggplot(aes(X,Y, col=omega_s2)) + 
+  geom_point(size=0.01,alpha=0.3) +
+    coord_fixed() + 
+  scale_color_gradient2()
+ggsave(plot = p1, filename = "plots/null/omega_s2.png",width=7,height=5)
+```
+
+Diagnostics – spatiotemporal fields
+
+```{r}
+p1 <- predictions$data |> 
+ggplot(aes(X,Y, col=epsilon_st1)) + 
+  geom_point(size=0.01,alpha=0.3) +
+    coord_fixed() + 
+  scale_color_gradient2() + 
+  facet_wrap(~year)
+ggsave(plot = p1, filename = "plots/null/epsilon_st1.png",width=9,height=7)
+
+p1 <- predictions$data |> 
+ggplot(aes(X,Y, col=epsilon_st2)) + 
+  geom_point(size=0.01,alpha=0.3) +
+    coord_fixed() + 
+  scale_color_gradient2() + 
+  facet_wrap(~year)
+ggsave(plot = p1, filename = "plots/null/epsilon_st2.png",width=9,height=7)
+```
+
+Residuals
+
+```{r}
+fit$data$resid <- residuals(fit)
 ```
