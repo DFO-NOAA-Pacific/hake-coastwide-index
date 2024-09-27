@@ -14,12 +14,16 @@ library(surveyjoin)
 library(sdmTMB)
 library(tidyr)
 library(dplyr)
-d <- d <- get_data(common = "north pacific hake", regions = c("pbs", "nwfsc"), years = 2003:2023) |>
-as.data.frame()
 
-table(d$year, d$region)
-
-saveRDS(d, "data_for_modelling.rds")
+if(!file.exists("data_for_modelling.rds")) {
+  d <- d <- get_data(common = "north pacific hake", regions = c("pbs", "nwfsc"), years = 2003:2023) |>
+  as.data.frame()
+  
+  table(d$year, d$region)
+  
+  saveRDS(d, "data_for_modelling.rds")
+}
+d <- readRDS("data_for_modelling.rds")
 ```
 
 ## Data cleaning
@@ -89,7 +93,7 @@ saveRDS(predictions,"predictions/null.rds")
 
 ## Index
 
-```         
+```{r}
 index <- get_index(predictions, area = expanded_grid$area, bias_correct = TRUE)
 saveRDS(index, "indices/null.rds")
 ```
@@ -160,4 +164,53 @@ Residuals
 
 ```{r}
 fit$data$resid <- residuals(fit)
+```
+
+Sensitivity – DOY
+
+```{r}
+d$doy <- lubridate::yday(d$date)
+d$zdoy <- as.numeric(scale(d$doy))
+d$zdoy2 <- d$zdoy^2
+fit2 <- sdmTMB(cpue ~ 0 + fyear + zdoy + zdoy2,
+              spatial="on",
+              spatiotemporal = "AR1",
+              mesh = mesh,
+              data = d,
+              time = "year",
+              family = delta_gamma())
+sanity(fit2) # passes all
+saveRDS(fit2, "fitted_models/doy.rds")
+
+expanded_grid$doy <- 182 # july 1
+expanded_grid$zdoy <- (182 - mean(d$doy)) / sd(d$doy)
+expanded_grid$zdoy2 <- expanded_grid$zdoy^2
+predictions <- predict(fit2, newdata = expanded_grid, return_tmb_object = TRUE)
+saveRDS(predictions,"predictions/doy.rds")
+index <- get_index(predictions, area = expanded_grid$area, bias_correct = TRUE)
+saveRDS(index, "indices/doy.rds")
+
+p1 <- index |>
+  ggplot(aes(year, log_est)) + 
+  geom_ribbon(aes(ymin=log_est-2*se, ymax=log_est+2*se), col=NA, fill=viridis(1), alpha=0.5) + 
+  geom_line(col=viridis(1)) + 
+  theme_bw() + 
+  xlab("Year") + ylab("Ln (estimate)")
+ggsave(plot = p1, filename = "plots/doy/log_index.png",width=7,height=5)
+
+# Make comparison plot
+null <- readRDS("indices/null.rds")
+null$Model <- "Null"
+index$Model <- "DOY"
+index <- rbind(null, index)
+
+p1 <- index |>
+  ggplot(aes(year, log_est, group=Model, col=Model, fill=Model)) + 
+  geom_ribbon(aes(ymin=log_est-2*se, ymax=log_est+2*se), col=NA, alpha=0.5) + 
+  geom_line() + 
+  theme_bw() + 
+  scale_color_viridis_d(option="magma", begin=0.2,end=0.8) + 
+  scale_fill_viridis_d(option="magma", begin=0.2,end=0.8) + 
+  xlab("Year") + ylab("Ln (estimate)")
+ggsave(plot = p1, filename = "plots/index_compare.png",width=7,height=5)
 ```
