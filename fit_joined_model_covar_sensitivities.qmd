@@ -10,13 +10,17 @@ editor: visual
 We are going to pull data from the `surveyjoin` package. We will restrict the data to just PBS and NWFSC samples, because the AFSC occurrences are so sparse.
 
 ```{r}
+remotes::install_github("DFO-NOAA-Pacific/surveyjoin", "8709fd1")
+remotes::install_github("pbs-assess/sdmTMB", "b146eb3")
 library(surveyjoin)
 library(sdmTMB)
 library(tidyr)
 library(dplyr)
 
 if(!file.exists("data_for_modelling.rds")) {
-  d <- d <- get_data(common = "north pacific hake", regions = c("pbs", "nwfsc"), years = 2003:2023) |>
+  d <- get_data(common = "north pacific hake", regions = c("pbs", "nwfsc"), years = 2003:2023) |>
+    dplyr::group_by(event_id) |>
+    slice(1) |>
   as.data.frame()
   
   table(d$year, d$region)
